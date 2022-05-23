@@ -61,6 +61,7 @@ def fit_and_evaluate_adaboost(noise, n_learners=250, train_size=5000, test_size=
     fig_Q2 = make_subplots(rows=2, cols=2, subplot_titles=titles, horizontal_spacing=0.01, vertical_spacing=0.03)
     for i, t in enumerate(T):
         fig_Q2.add_traces(
+
             [decision_surface(lambda X: adaboost.partial_predict(X, t), lims[0], lims[1], showscale=False),
              go.Scatter(x=test_X[:, 0], y=test_X[:, 1], mode="markers", showlegend=False,
                         marker=dict(color=test_y.astype(int), symbol=class_symbols[test_y.astype(int)],
