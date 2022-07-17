@@ -8,37 +8,33 @@ from .learning_rate import FixedLR
 OUTPUT_VECTOR_TYPE = ["last", "best", "average"]
 
 
-def default_callback(model: GradientDescent, **kwargs) -> NoReturn:
+def default_callback(**kwargs) -> NoReturn:
     pass
 
 
 class GradientDescent:
     """
     Gradient Descent algorithm
-
     Attributes:
     -----------
     learning_rate_: BaseLR
         Learning rate strategy for retrieving the learning rate at each iteration t of the algorithm
-
     tol_: float
         The stopping criterion. Training stops when the Euclidean norm of w^(t)-w^(t-1) is less than
         specified tolerance
-
     max_iter_: int
         The maximum number of GD iterations to be performed before stopping training
-
     out_type_: str
         Type of returned solution:
             - `last`: returns the point reached at the last GD iteration
             - `best`: returns the point achieving the lowest objective
             - `average`: returns the average point over the GD iterations
-
-    callback_: Callable[[GradientDescent, ...], None]
-        A callable function to be called after each update of the model while fitting to given data
-        Callable function should receive as input a GradientDescent instance, and any additional
-        arguments specified in the `GradientDescent.fit` function
+    callback_: Callable[[...], None], default=default_callback
+        A callable function to be called after each update of the model while fitting to given data.
+        Callable function receives as input any argument relevant for the current GD iteration. Arguments
+        are specified in the `GradientDescent.fit` function
     """
+
     def __init__(self,
                  learning_rate: BaseLR = FixedLR(1e-3),
                  tol: float = 1e-5,
@@ -47,26 +43,21 @@ class GradientDescent:
                  callback: Callable[[GradientDescent, ...], None] = default_callback):
         """
         Instantiate a new instance of the GradientDescent class
-
         Parameters
         ----------
         learning_rate: BaseLR, default=FixedLR(1e-3)
             Learning rate strategy for retrieving the learning rate at each iteration t of the algorithm
-
         tol: float, default=1e-5
             The stopping criterion. Training stops when the Euclidean norm of w^(t)-w^(t-1) is less than
             specified tolerance
-
         max_iter: int, default=1000
             The maximum number of GD iterations to be performed before stopping training
-
         out_type: str, default="last"
             Type of returned solution. Supported types are specified in class attributes
-
-        callback: Callable[[GradientDescent, ...], None], default=default_callback
-            A callable function to be called after each update of the model while fitting to given data
-            Callable function should receive as input a GradientDescent instance, and any additional
-            arguments specified in the `GradientDescent.fit` function
+        callback: Callable[[...], None], default=default_callback
+            A callable function to be called after each update of the model while fitting to given data.
+            Callable function receives as input any argument relevant for the current GD iteration. Arguments
+            are specified in the `GradientDescent.fit` function
         """
         self.learning_rate_ = learning_rate
         if out_type not in OUTPUT_VECTOR_TYPE:
@@ -79,7 +70,6 @@ class GradientDescent:
     def fit(self, f: BaseModule, X: np.ndarray, y: np.ndarray):
         """
         Optimize module using Gradient Descent iterations over given input samples and responses
-
         Parameters
         ----------
         f : BaseModule
@@ -88,19 +78,15 @@ class GradientDescent:
             Input data to optimize module over
         y : ndarray of shape (n_samples, )
             Responses of input data to optimize module over
-
         Returns
         -------
         solution: ndarray of shape (n_features)
             Obtained solution for module optimization, according to the specified self.out_type_
-
         Notes
         -----
         - Optimization is performed as long as self.max_iter_ has not been reached and that
         Euclidean norm of w^(t)-w^(t-1) is more than the specified self.tol_
-
         - At each iteration the learning rate is specified according to self.learning_rate_.lr_step
-
         - At the end of each iteration the self.callback_ function is called passing self and the
         following named arguments:
             - solver: GradientDescent
@@ -117,6 +103,28 @@ class GradientDescent:
                 Learning rate used at current iteration
             - delta: float
                 Euclidean norm of w^(t)-w^(t-1)
-
         """
-        raise NotImplementedError()
+        all_weights = [f.weights]
+        for t in range(self.max_iter_):
+            all_weights.append(all_weights[-1] - self.learning_rate_.lr_step(t=t) * f.compute_jacobian(X=X, y=y))
+            f.weights = all_weights[-1]
+            cur_weight_val = f.compute_output(X=X, y=y)
+            cur_weight_jacobian = f.compute_jacobian(X=X, y=y)
+            norm = np.linalg.norm(all_weights[-1] - all_weights[-2])
+            self.callback_(GD=self, weight=all_weights[-1], value=cur_weight_val, jacobian=cur_weight_jacobian, t=t,
+                           eta=self.learning_rate_.lr_step(t=t), delta=norm)
+            if norm < self.tol_:
+                break
+        if self.out_type_ == OUTPUT_VECTOR_TYPE[0]:
+            return all_weights[-1]
+        if self.out_type_ == OUTPUT_VECTOR_TYPE[1]:
+            min_val = float('inf')
+            best_w = None
+            for w in all_weights:
+                f.weights(w)
+                temp = f.compute_output(X=X, y=y)
+                if temp < min_val:
+                    min_val = temp
+                    best_w = w
+            return best_w
+        return np.mean(all_weights, axis=1)

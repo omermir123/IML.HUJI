@@ -48,7 +48,19 @@ class LogisticRegression(BaseEstimator):
         Fits model using specified `self.optimizer_` passed when instantiating class and includes an intercept
         if specified by `self.include_intercept_
         """
-        raise NotImplementedError()
+        if self.include_intercept_:
+            X = np.column_stack(([1] * X.shape[0], X))
+        init = np.random.normal(0, 1, X.shape[1]) / np.sqrt(X.shape[1])
+        model = None
+        if self.penalty_ == "none":
+            model = LogisticModule(init)
+        elif self.penalty_ == "l1":
+            model = RegularizedModule(LogisticModule(None), L1(None), self.lam_, None, self.include_intercept_)
+            model.weights = init
+        else:
+            model = RegularizedModule(LogisticModule(None), L2(None), self.lam_, None, self.include_intercept_)
+            model.weights = init
+        self.coefs_ = self.solver_.fit(f=model, X=X, y=y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -64,7 +76,7 @@ class LogisticRegression(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        raise NotImplementedError()
+        return np.where(self.predict_proba(X) < self.alpha_, 0, 1)
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """
@@ -80,7 +92,10 @@ class LogisticRegression(BaseEstimator):
         probabilities: ndarray of shape (n_samples,)
             Probability of each sample being classified as `1` according to the fitted model
         """
-        raise NotImplementedError()
+        if self.include_intercept_:
+            X = np.column_stack(([1] * X.shape[0], X))
+        temp = X @ self.coefs_
+        return np.exp(temp) / (np.exp(temp) + 1)
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
@@ -99,4 +114,5 @@ class LogisticRegression(BaseEstimator):
         loss : float
             Performance under misclassification error
         """
-        raise NotImplementedError()
+        from ...metrics import misclassification_error
+        return misclassification_error(y, self._predict(X))

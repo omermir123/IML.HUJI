@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import NoReturn
 from ...base import BaseEstimator
 import numpy as np
-#todo check if legal
 from numpy.linalg import pinv
 from ...metrics import mean_square_error
 
